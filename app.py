@@ -14,7 +14,7 @@ df['datetime'] = pd.to_datetime(df['datetime'])
 
 # --- Карта забруднення ---
 st.subheader("Карта забруднення")
-m = folium.Map(location=[df['latitude'].mean(), df['longitude'].mean()], zoom_start=11)
+m = folium.Map(location=[48.685, 26.588], zoom_start=13)  # Центр Кам'янця-Подільського
 for i, row in df.iterrows():
     folium.CircleMarker(
         location=[row['latitude'], row['longitude']],
@@ -32,23 +32,32 @@ st.subheader("Тренди PM2.5")
 fig = px.line(df, x='datetime', y='PM2.5', title="Динаміка PM2.5")
 st.plotly_chart(fig)
 
-# --- Прогноз PM2.5 ---
-st.subheader("Прогноз PM2.5")
-df_sorted = df.sort_values('datetime')
-df_sorted['timestamp'] = df_sorted['datetime'].map(pd.Timestamp.timestamp)
-X = df_sorted[['timestamp']]
-y = df_sorted['PM2.5']
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+import plotly.express as px
+import streamlit as st
+
+# --- Створення колонки для тренду часу ---
+df['time_index'] = range(len(df))
+
+# --- Модель лінійної регресії ---
+X = df[['time_index']]
+y = df['PM2.5']
+
 model = LinearRegression()
 model.fit(X, y)
 
-future_times = pd.date_range(df_sorted['datetime'].max(), periods=10, freq='H')
-future_timestamps = np.array([t.timestamp() for t in future_times]).reshape(-1,1)
-forecast = model.predict(future_timestamps)
+# --- Прогноз на наступні 10 годин ---
+future_index = pd.DataFrame({'time_index': range(len(df), len(df)+10)})
+future_timestamps = pd.date_range(start=df['datetime'].iloc[-1] + pd.Timedelta(hours=1), periods=10, freq='H')
+future_pred = model.predict(future_index)
 
 forecast_df = pd.DataFrame({
-    'datetime': future_times,
-    'PM2.5': forecast
+    'datetime': future_timestamps,
+    'PM2.5': future_pred
 })
 
-fig_forecast = px.line(forecast_df, x='datetime', y='PM2.5', title="Прогноз PM2.5")
+# --- Візуалізація ---
+st.subheader("Прогноз PM2.5 на 10 годин вперед для Кам'янця-Подільського")
+fig_forecast = px.line(forecast_df, x='datetime', y='PM2.5', markers=True)
 st.plotly_chart(fig_forecast)
