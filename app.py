@@ -1,68 +1,58 @@
 import streamlit as st
 import pandas as pd
-import folium
-from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-import numpy as np
+import folium
+from streamlit_folium import st_folium
 
-st.set_page_config(page_title="Екологічна аналітика", layout="wide")
+# Заголовок додатку
+st.title("Екологічна аналітика – Кам'янець-Подільський")
 
-st.title("Екологічна аналітика — Кам'янець-Подільський")
+# Завантаження даних з GitHub RAW
+DATA_URL = "https://raw.githubusercontent.com/OoverHeaven/ekologichna_analityka/main/data/air_quality.csv"
+df = pd.read_csv(DATA_URL)
 
-# 1. Завантаження даних з GitHub
-URL = "https://raw.githubusercontent.com/OoverHeaven/ekologichna_analityka/main/data/air_quality.csv"
-df = pd.read_csv(URL)
+# Перейменовуємо у зручніші назви
+df["lat"] = df["latitude"]
+df["lng"] = df["longitude"]
 
-# 2. Відображення таблиці
-st.subheader("Дані якості повітря")
-st.dataframe(df)
-
-# 3. Створення карти
-st.subheader("Карта забруднення PM2.5")
-
+# Центр карти
 center_lat = df["lat"].mean()
-center_lon = df["lon"].mean()
+center_lng = df["lng"].mean()
 
-map_sensor = folium.Map(location=[center_lat, center_lon], zoom_start=13)
+# Карта забруднення
+st.header("Карта забруднення")
+m = folium.Map(location=[center_lat, center_lng], zoom_start=13)
 
-for _, row in df.iterrows():
+for i, row in df.iterrows():
     folium.CircleMarker(
-        location=[row["lat"], row["lon"]],
-        radius=8,
-        popup=f"{row['location']}: PM2.5 = {row['pm25']}",
-        fill=True,
-    ).add_to(map_sensor)
+        location=[row["lat"], row["lng"]],
+        radius=row["PM2.5"] / 2,
+        popup=f"PM2.5: {row['PM2.5']}",
+        fill=True
+    ).add_to(m)
 
-st_folium(map_sensor, width=700, height=500)
+st_folium(m, width=700, height=500)
 
-# 4. Аналіз тренду PM2.5
-st.subheader("Тренд зміни PM2.5")
-
+# Аналіз трендів
+st.header("Тренд PM2.5")
 df["datetime"] = pd.to_datetime(df["datetime"])
 df = df.sort_values("datetime")
 
 plt.figure()
-plt.plot(df["datetime"], df["pm25"])
-plt.xlabel("Дата")
+plt.plot(df["datetime"], df["PM2.5"])
+plt.xlabel("Дата та час")
 plt.ylabel("PM2.5")
-plt.title("Тренд якості повітря")
-plt.xticks(rotation=45)
+plt.title("Динаміка забруднення PM2.5")
 st.pyplot(plt)
 
-# 5. Простий прогноз PM2.5
-st.subheader("Прогноз PM2.5 на наступні 5 годин")
-
-df["hour"] = df["datetime"].dt.hour
+# Прогноз PM2.5 (лінійна регресія)
+st.header("Прогноз PM2.5")
 model = LinearRegression()
-model.fit(df[["hour"]], df["pm25"])
+df["time_index"] = range(len(df))
+model.fit(df[["time_index"]], df["PM2.5"])
+future_index = pd.DataFrame({"time_index": range(len(df), len(df) + 5)})
+future_pred = model.predict(future_index)
 
-future_hours = np.array([[h] for h in range(24, 29)])
-pred = model.predict(future_hours)
-
-future_df = pd.DataFrame({
-    "Година": future_hours.flatten(),
-    "Прогноз PM2.5": pred
-})
-
-st.dataframe(future_df)
+st.write("Прогноз на наступні 5 вимірювань:")
+st.write(future_pred)
